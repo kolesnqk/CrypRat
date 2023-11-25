@@ -1,5 +1,7 @@
 # CrypRat
 Simple Encryption Program
+
+![image](https://github.com/kolesnqk/CrypRat/assets/122218326/3f4c8fdf-b904-4c52-b141-e2e706df631a)
 # Features
 Encryption: Input a message, and CrypRat will encrypt it using a shuffled key.
 Decryption: Input an encrypted message, and CrypRat will decrypt it using the key.
