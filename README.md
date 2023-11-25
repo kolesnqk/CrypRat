@@ -9,5 +9,7 @@ Exit: Close the program.
 # Notes
 The encryption key is shuffled to provide a unique mapping for each run.
 This program is a basic implementation and may not be suitable for cryptographic purposes
+# Author
+kolesnqk
 
 
