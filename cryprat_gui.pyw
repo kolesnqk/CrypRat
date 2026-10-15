@@ -21,7 +21,17 @@ from tkinter import font as tkfont
 # Логика шифра (та же, что в консольной версии — без изменений)
 # ---------------------------------------------------------------------------
 
-ALPHABET: str = " " + string.punctuation + string.digits + string.ascii_letters
+CYRILLIC_LOWER: str = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяіїєґ"
+CYRILLIC_UPPER: str = CYRILLIC_LOWER.upper()
+
+ALPHABET: str = (
+    " "
+    + string.punctuation
+    + string.digits
+    + string.ascii_letters
+    + CYRILLIC_LOWER
+    + CYRILLIC_UPPER
+)
 
 
 class CipherError(Exception):
