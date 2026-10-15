@@ -183,12 +183,22 @@ class CustomTitleBar(tk.Frame):
 
     def _minimize(self) -> None:
         root = self.winfo_toplevel()
+        # Окну без стандартной рамки (overrideredirect) Windows обычно не
+        # даёт значка в панели задач, так что "свернуть" выглядело бы как
+        # "закрыть" — нечем будет вернуть окно обратно. Поэтому сначала на
+        # мгновение возвращаем обычную рамку (чтобы Windows успела завести
+        # значок в панели задач), ждём немного (update_idletasks + after),
+        # и только потом сворачиваем — это даёт менеджеру окон время
+        # зарегистрировать окно, вместо того чтобы сворачивать и убирать
+        # рамку практически одновременно.
         root.overrideredirect(False)
-        root.iconify()
+        root.update_idletasks()
+        root.after(60, root.iconify)
 
-        def _on_restore(_event=None):
-            root.overrideredirect(True)
-            root.unbind("<Map>")
+        def _on_restore(_event=None) -> None:
+            if root.state() == "normal":
+                root.unbind("<Map>")
+                root.after(60, lambda: root.overrideredirect(True))
 
         root.bind("<Map>", _on_restore)
 
@@ -213,13 +223,15 @@ class EncryptScreen(Raised):
 
         tk.Label(self, text="Результат:", bg=BG, font=font_lbl).pack(anchor="w", padx=8, pady=(6, 2))
         self.output = tk.Text(self, height=3, width=48, font=font_mono, bd=2, relief="sunken", state="disabled")
-        self.output.pack(padx=8, pady=(0, 6))
+        self.output.pack(padx=8, pady=(0, 2))
+        RetroButton(self, text="📋 Копировать шифротекст", command=self._copy_ciphertext).pack(pady=(0, 6))
 
         tk.Label(self, text="Ключ (сохраните — без него не расшифровать):", bg=BG, font=font_lbl).pack(
             anchor="w", padx=8, pady=(0, 2)
         )
         self.key_box = tk.Text(self, height=3, width=48, font=font_mono, bd=2, relief="sunken", state="disabled")
-        self.key_box.pack(padx=8, pady=(0, 6))
+        self.key_box.pack(padx=8, pady=(0, 2))
+        RetroButton(self, text="📋 Копировать ключ", command=self._copy_key).pack(pady=(0, 6))
 
         self.status = tk.Label(self, text="", bg=BG, fg="#aa0000", font=retro_font(8))
         self.status.pack(anchor="w", padx=8)
@@ -227,6 +239,8 @@ class EncryptScreen(Raised):
         RetroButton(self, text="← Назад в меню", command=show_menu).pack(pady=(4, 8))
 
         self.cipher = cipher
+        self._last_ciphertext = ""
+        self._last_key_token = ""
 
     def _set_readonly_text(self, widget: tk.Text, value: str) -> None:
         widget.configure(state="normal")
@@ -234,14 +248,30 @@ class EncryptScreen(Raised):
         widget.insert("1.0", value)
         widget.configure(state="disabled")
 
+    def _copy_to_clipboard(self, value: str) -> None:
+        if not value:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(value)
+        self.update()  # чтобы буфер обмена сохранился, даже если окно сразу закроют
+        self.status.configure(text="Скопировано в буфер обмена", fg="#006600")
+
+    def _copy_ciphertext(self) -> None:
+        self._copy_to_clipboard(self._last_ciphertext)
+
+    def _copy_key(self) -> None:
+        self._copy_to_clipboard(self._last_key_token)
+
     def _encrypt(self) -> None:
         text = self.input.get("1.0", "end-1c")
         try:
             result = self.cipher.encrypt(text)
         except CipherError as exc:
-            self.status.configure(text=f"Ошибка: {exc}")
+            self.status.configure(text=f"Ошибка: {exc}", fg="#aa0000")
             return
-        self.status.configure(text="")
+        self.status.configure(text="", fg="#aa0000")
+        self._last_ciphertext = result.ciphertext
+        self._last_key_token = result.key_token
         self._set_readonly_text(self.output, result.ciphertext)
         self._set_readonly_text(self.key_box, result.key_token)
 
@@ -266,7 +296,8 @@ class DecryptScreen(Raised):
 
         tk.Label(self, text="Результат:", bg=BG, font=font_lbl).pack(anchor="w", padx=8, pady=(6, 2))
         self.output = tk.Text(self, height=4, width=48, font=font_mono, bd=2, relief="sunken", state="disabled")
-        self.output.pack(padx=8, pady=(0, 6))
+        self.output.pack(padx=8, pady=(0, 2))
+        RetroButton(self, text="📋 Копировать результат", command=self._copy_result).pack(pady=(0, 6))
 
         self.status = tk.Label(self, text="", bg=BG, fg="#aa0000", font=retro_font(8))
         self.status.pack(anchor="w", padx=8)
@@ -274,6 +305,15 @@ class DecryptScreen(Raised):
         RetroButton(self, text="← Назад в меню", command=show_menu).pack(pady=(4, 8))
 
         self.cipher = cipher
+        self._last_plaintext = ""
+
+    def _copy_result(self) -> None:
+        if not self._last_plaintext:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(self._last_plaintext)
+        self.update()
+        self.status.configure(text="Скопировано в буфер обмена", fg="#006600")
 
     def _decrypt(self) -> None:
         ciphertext = self.cipher_input.get("1.0", "end-1c")
@@ -281,9 +321,10 @@ class DecryptScreen(Raised):
         try:
             plaintext = self.cipher.decrypt(ciphertext, key_token)
         except CipherError as exc:
-            self.status.configure(text=f"Ошибка: {exc}")
+            self.status.configure(text=f"Ошибка: {exc}", fg="#aa0000")
             return
-        self.status.configure(text="")
+        self.status.configure(text="", fg="#aa0000")
+        self._last_plaintext = plaintext
         self.output.configure(state="normal")
         self.output.delete("1.0", "end")
         self.output.insert("1.0", plaintext)
@@ -314,7 +355,7 @@ class CrypRatApp(tk.Tk):
         super().__init__()
         self.overrideredirect(True)
         self.configure(bg=BORDER_DARK)
-        self.geometry("420x480+300+150")
+        self.geometry("440x620+280+80")
         self.resizable(False, False)
         self._set_icon()
 
